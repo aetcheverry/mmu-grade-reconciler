@@ -54,6 +54,12 @@ conda env create -f environment.yml
 conda activate grade-reconciler
 ```
 
+**4. Install ODS support**
+
+```bash
+pip install odfpy
+```
+
 ---
 
 ## Usage
@@ -77,13 +83,13 @@ The app opens a desktop window. Follow the three steps:
 ## Project Structure
 
 ```
-grade-reconciler/
+mmu-grade-reconciler/
 ├── app.py                  # Tkinter UI — main entry point
 ├── environment.yml         # Conda environment definition
-└── core/
-    ├── loader.py           # File ingestion (.xlsx, .xls, .ods)
-    ├── parser.py           # Format auto-detection and per-source parsers
-    └── reconciler.py       # Join logic and mismatch detection
+├── core/
+│   ├── loader.py           # File ingestion (.xlsx, .xls, .ods)
+│   ├── parser.py           # Format auto-detection and per-source parsers
+│   └── reconciler.py       # Join logic and mismatch detection
 ```
 
 ---
