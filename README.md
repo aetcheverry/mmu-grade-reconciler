@@ -81,11 +81,9 @@ grade-reconciler/
 ├── app.py                  # Tkinter UI — main entry point
 ├── environment.yml         # Conda environment definition
 ├── core/
-│   ├── loader.py           # File ingestion (.xlsx, .xls, .ods)
-│   ├── parser.py           # Format auto-detection and per-source parsers
-│   └── reconciler.py       # Join logic and mismatch detection
-└── reports/
-    └── pdf_report.py       # PDF report generation (optional, not used in UI)
+    ├── loader.py           # File ingestion (.xlsx, .xls, .ods)
+    ├── parser.py           # Format auto-detection and per-source parsers
+    └── reconciler.py       # Join logic and mismatch detection
 ```
 
 ---
