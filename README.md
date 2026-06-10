@@ -80,7 +80,7 @@ The app opens a desktop window. Follow the three steps:
 grade-reconciler/
 ├── app.py                  # Tkinter UI — main entry point
 ├── environment.yml         # Conda environment definition
-├── core/
+└── core/
     ├── loader.py           # File ingestion (.xlsx, .xls, .ods)
     ├── parser.py           # Format auto-detection and per-source parsers
     └── reconciler.py       # Join logic and mismatch detection
