@@ -97,7 +97,7 @@ mmu-grade-reconciler/
 ## Notes
 
 - Files stored on OneDrive may be locked while syncing or open in Excel. Close the file first if you get a permission error.
-- The app matches students by their 8-digit MMU ID. IDs in the format `12345678@stu.mmu.ac.uk` are automatically stripped to the numeric part.
+- The app matches students by their 8-digit MMU ID. Email-format IDs are automatically stripped to the numeric part.
 - Only assessments present in the Power BI export are compared. If an assessment ID appears in Power BI but not in your Excel/Moodle file, a warning is shown.
 
 ---
