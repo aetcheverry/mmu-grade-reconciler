@@ -43,6 +43,10 @@ class ReconcileResult:
         return "⚠️  " + ", ".join(parts) + "."
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# TWO-WAY RECONCILIATION
+# ══════════════════════════════════════════════════════════════════════════════
+
 def reconcile(parse_powerbi, parse_other,
               label_powerbi: str, label_other: str) -> ReconcileResult:
     """
@@ -68,15 +72,10 @@ def reconcile(parse_powerbi, parse_other,
     col_pb  = f"{label_powerbi} Grade"
     col_oth = f"{label_other} Grade"
 
-    keep_pb  = ["student_id", "student_name"] + valid_ids
-    keep_oth = ["student_id", "student_name"] + [a for a in valid_ids
-                                                  if a in df_oth.columns]
-
-    # Ensure student_name exists in both
     if "student_name" not in df_oth.columns:
         df_oth["student_name"] = "—"
 
-    merged = df_pb[keep_pb].merge(
+    merged = df_pb[["student_id", "student_name"] + valid_ids].merge(
         df_oth[["student_id", "student_name"] + valid_ids],
         on="student_id",
         how="outer",
@@ -93,11 +92,11 @@ def reconcile(parse_powerbi, parse_other,
     for _, row in merged.iterrows():
         sid        = row["student_id"]
         merge_side = row["_merge"]
-        name       = _coalesce(row.get("student_name_pb"), row.get("student_name_oth"),
+        name       = _coalesce(row.get("student_name_pb"),
+                               row.get("student_name_oth"),
                                row.get("student_name"))
 
         if merge_side == "left_only":
-            # In Power BI but not in the other file
             total_missing_oth += 1
             missing_rows.append({
                 "MMU ID":       sid,
@@ -106,7 +105,6 @@ def reconcile(parse_powerbi, parse_other,
             })
 
         elif merge_side == "right_only":
-            # In the other file but not in Power BI
             total_missing_pb += 1
             missing_rows.append({
                 "MMU ID":       sid,
@@ -115,7 +113,6 @@ def reconcile(parse_powerbi, parse_other,
             })
 
         else:
-            # Present in both — compare each assessment
             for aid in valid_ids:
                 grade_pb  = _coalesce(row.get(f"{aid}_pb"))
                 grade_oth = _coalesce(row.get(f"{aid}_oth"))
@@ -153,11 +150,27 @@ def reconcile(parse_powerbi, parse_other,
     )
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# THREE-WAY RECONCILIATION
+# ══════════════════════════════════════════════════════════════════════════════
+
 def reconcile_three(parse_powerbi, parse_a, parse_b,
                     label_pb: str, label_a: str, label_b: str) -> ReconcileResult:
     """
-    Three-way comparison: Power BI vs two other sources.
-    Missing students are those absent from any of the three sources.
+    Three-way comparison: Power BI vs two other sources (e.g. Excel + Moodle).
+
+    Key behaviour:
+    - A student missing from one source is reported in the missing table.
+    - Grade mismatches are reported for ALL students present in at least
+      Power BI + one other source — a student absent from source B is still
+      compared between Power BI and source A.
+
+    mismatches columns:
+        MMU ID | Student Name | Assessment |
+        <pb> Grade | <a> Grade | <b> Grade | Discrepancy
+
+    missing_students columns:
+        MMU ID | Student Name | Missing In
     """
     df_pb = parse_powerbi.df.copy()
     df_a  = parse_a.df.copy()
@@ -170,29 +183,29 @@ def reconcile_three(parse_powerbi, parse_a, parse_b,
     pb_aids   = parse_powerbi.assessment_ids
     a_aids    = set(parse_a.assessment_ids)
     b_aids    = set(parse_b.assessment_ids)
-    valid_ids = [aid for aid in pb_aids if aid in a_aids and aid in b_aids]
+
+    # Assessments comparable across all three
+    valid_ids = [aid for aid in pb_aids if aid in a_aids or aid in b_aids]
 
     col_pb = f"{label_pb} Grade"
     col_a  = f"{label_a} Grade"
     col_b  = f"{label_b} Grade"
 
-    # Build a unified student list across all three sources
-    all_ids = (set(df_pb["student_id"]) |
-               set(df_a["student_id"])  |
-               set(df_b["student_id"])  )
-
+    # Build per-student lookup dictionaries for fast access
     pb_ids = set(df_pb["student_id"])
     a_ids  = set(df_a["student_id"])
     b_ids  = set(df_b["student_id"])
+    all_ids = pb_ids | a_ids | b_ids
 
-    # Index by student_id for fast lookup
     pb_idx = df_pb.set_index("student_id")
     a_idx  = df_a.set_index("student_id")
     b_idx  = df_b.set_index("student_id")
 
     mismatch_rows = []
     missing_rows  = []
-    total_mismatches = 0
+    total_mismatches  = 0
+    total_missing_pb  = 0
+    total_missing_oth = 0
 
     for sid in sorted(all_ids):
         in_pb = sid in pb_ids
@@ -209,36 +222,49 @@ def reconcile_three(parse_powerbi, parse_a, parse_b,
                     name = n
                     break
 
-        # Missing from one or more sources
+        # Record missing entries
         absent = []
         if not in_pb: absent.append(label_pb)
         if not in_a:  absent.append(label_a)
         if not in_b:  absent.append(label_b)
+
+        if not in_pb:
+            total_missing_pb += 1
+        if not in_a or not in_b:
+            total_missing_oth += 1
+
         if absent:
             missing_rows.append({
                 "MMU ID":       sid,
                 "Student Name": name,
                 "Missing In":   ", ".join(absent),
             })
-            continue   # skip grade comparison for missing students
 
-        # Grade comparison across all valid assessment IDs
+        # Grade comparison — run for any student in Power BI + at least one other
+        # This ensures a student missing from Moodle is still compared between
+        # Power BI and Excel, and vice versa.
+        if not in_pb:
+            continue   # can't compare grades without a Power BI reference
+
         pb_row = pb_idx.loc[sid]
-        a_row  = a_idx.loc[sid]
-        b_row  = b_idx.loc[sid]
 
         for aid in valid_ids:
-            grade_pb = _coalesce(pb_row.get(aid) if hasattr(pb_row, 'get') else pb_row[aid]
-                                 if aid in pb_row.index else "—")
-            grade_a  = _coalesce(a_row.get(aid)  if hasattr(a_row,  'get') else a_row[aid]
-                                 if aid in a_row.index  else "—")
-            grade_b  = _coalesce(b_row.get(aid)  if hasattr(b_row,  'get') else b_row[aid]
-                                 if aid in b_row.index  else "—")
+            grade_pb = _get_grade(pb_row, aid)
 
-            any_diff = (_grades_differ(grade_pb, grade_a) or
-                        _grades_differ(grade_pb, grade_b) or
-                        _grades_differ(grade_a,  grade_b))
-            if any_diff:
+            # Get grade from A if available, else "—"
+            grade_a = _get_grade(a_idx.loc[sid], aid) if in_a else "—"
+
+            # Get grade from B if available, else "—"
+            grade_b = _get_grade(b_idx.loc[sid], aid) if in_b else "—"
+
+            # Compare Power BI vs A (if A is present)
+            pb_vs_a = _grades_differ(grade_pb, grade_a) if in_a else False
+            # Compare Power BI vs B (if B is present)
+            pb_vs_b = _grades_differ(grade_pb, grade_b) if in_b else False
+            # Compare A vs B (only if both present)
+            a_vs_b  = _grades_differ(grade_a, grade_b) if (in_a and in_b) else False
+
+            if pb_vs_a or pb_vs_b or a_vs_b:
                 total_mismatches += 1
                 mismatch_rows.append({
                     "MMU ID":       sid,
@@ -263,9 +289,8 @@ def reconcile_three(parse_powerbi, parse_a, parse_b,
         mismatches=mismatches,
         missing_students=missing_students,
         total_compared=len(pb_ids & a_ids & b_ids),
-        total_missing_powerbi=sum(1 for s in all_ids if s not in pb_ids),
-        total_missing_other=sum(1 for s in all_ids
-                                if s not in a_ids or s not in b_ids),
+        total_missing_powerbi=total_missing_pb,
+        total_missing_other=total_missing_oth,
         total_grade_mismatches=total_mismatches,
         label_powerbi=label_pb,
         label_other=f"{label_a} & {label_b}",
@@ -274,6 +299,15 @@ def reconcile_three(parse_powerbi, parse_a, parse_b,
 
 
 # ── Private helpers ────────────────────────────────────────────────────────────
+
+def _get_grade(row, aid: str) -> str:
+    """Safely retrieve a grade value from an indexed row."""
+    try:
+        val = row[aid] if aid in row.index else "—"
+    except Exception:
+        val = "—"
+    return _coalesce(val)
+
 
 def _coalesce(*values) -> str:
     for v in values:

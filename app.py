@@ -287,6 +287,13 @@ class UploadSlot(tk.Frame):
                      font=FONT_SMALL, fg=C_RED_FG, bg=C_PANEL,
                      wraplength=220, justify="left").pack(side="left")
 
+    def reset(self):
+        """Clear the slot back to its initial empty state."""
+        self.parse_result = None
+        self._name_var.set("No file selected")
+        for w in self._badge_frame.winfo_children():
+            w.destroy()
+
     def ready(self) -> bool:
         return self.parse_result is not None and self.parse_result.success
 
@@ -380,10 +387,18 @@ class GradeReconcilerApp(tk.Tk):
     def _build_run_section(self):
         SectionLabel(self._root_frame, "Step 2 — Compare").pack(
             fill="x", pady=(0, 4))
+
+        btn_row = tk.Frame(self._root_frame, bg=C_BG)
+        btn_row.pack(fill="x", pady=(0, 12))
+        btn_row.columnconfigure(0, weight=1)
+
         self._run_btn = PrimaryButton(
-            self._root_frame, text="🔍  Run comparison",
+            btn_row, text="🔍  Run comparison",
             command=self._run, state="disabled")
-        self._run_btn.pack(fill="x", pady=(0, 12))
+        self._run_btn.grid(row=0, column=0, sticky="ew", padx=(0, 8))
+
+        SecondaryButton(btn_row, text="↺  Reset",
+                        command=self._reset).grid(row=0, column=1, sticky="ew")
 
     # ── Slot callback ──────────────────────────────────────────────────────────
 
@@ -394,6 +409,16 @@ class GradeReconcilerApp(tk.Tk):
         other_ready = self._slot_b.ready() or self._slot_c.ready()
         self._run_btn.config(
             state="normal" if (pb_ready and other_ready) else "disabled")
+
+    # ── Reset ──────────────────────────────────────────────────────────────────
+
+    def _reset(self):
+        """Clear all slots, results, and reset the UI to its initial state."""
+        for slot in (self._slot_pb, self._slot_b, self._slot_c):
+            slot.reset()
+        self._run_btn.config(state="disabled")
+        for w in self._results_frame.winfo_children():
+            w.destroy()
 
     # ── Run comparison ─────────────────────────────────────────────────────────
 

@@ -44,3 +44,8 @@ desktop.ini
 
 # Output files
 *.pdf
+
+# PyInstaller
+build/
+dist/
+*.spec

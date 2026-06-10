@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented here.
 
+## [0.2.0] — 2026
+
+### Added
+- Reset button to clear all uploaded files and results in one click
+
+### Fixed
+- Three-way comparison now correctly reports grade mismatches for students
+  missing from one source (e.g. absent from Moodle but present in both
+  Power BI and Excel — their Power BI vs Excel mismatch is now shown)
+
+---
+
 ## [0.1.0] — 2026
 
 ### Added
